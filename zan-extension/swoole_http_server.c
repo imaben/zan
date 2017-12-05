@@ -56,6 +56,8 @@ swString *swoole_zlib_buffer = NULL;
 #endif
 swString *swoole_http_form_data_buffer;
 
+static http_context *current_ctx = NULL;
+
 enum http_global_flag
 {
     HTTP_GLOBAL_GET       = 1u << 1,
@@ -86,6 +88,26 @@ zend_class_entry *swoole_http_response_class_entry_ptr;
 static zend_class_entry swoole_http_request_ce;
 zend_class_entry *swoole_http_request_class_entry_ptr;
 
+static void (*old_error_handler)(int, const char *, const uint, const char*, va_list);
+static void worker_error_handler(int error_num, const char *error_filename, const uint error_lineno, const char *format, va_list args);
+
+#ifdef va_copy
+#define call_old_error_handler(error_num, error_filename, error_lineno, format, args) \
+{ \
+	va_list copy; \
+	va_copy(copy, args); \
+	old_error_handler(error_num, error_filename, error_lineno, format, copy); \
+	va_end(copy); \
+}
+#else
+#define call_old_error_handler(error_num, error_filename, error_lineno, format, args) \
+{ \
+	old_error_handler(error_num, error_filename, error_lineno, format, args); \
+}
+#endif
+
+static void http_onWorkerStart(swServer *serv, int worker_id);
+static void http_onWorkerStop(swServer *serv, int worker_id);
 static int http_onReceive(swServer *serv, swEventData *req);
 static void http_onClose(swServer *serv, swDataHead *info);
 
@@ -916,6 +938,19 @@ static int http_request_message_complete(php_http_parser *parser)
     return 0;
 }
 
+static void http_onWorkerStart(swServer *serv, int worker_id)
+{
+    old_error_handler = zend_error_cb;
+    zend_error_cb = worker_error_handler;
+    php_swoole_onWorkerStart(serv, worker_id);
+}
+
+static void http_onWorkerStop(swServer *serv, int worker_id)
+{
+    zend_error_cb = old_error_handler;
+    php_swoole_onWorkerStop(serv, worker_id);
+}
+
 static int http_onReceive(swServer *serv, swEventData *req)
 {
     if (swEventData_is_dgram(req->info.type))
@@ -1433,8 +1468,10 @@ static PHP_METHOD(swoole_http_server, start)
     }
 #endif
 
-    serv->onReceive = http_onReceive;
-    serv->onClose = http_onClose;
+    serv->onWorkerStart = http_onWorkerStart;
+    serv->onWorkerStop  = http_onWorkerStop;
+    serv->onReceive     = http_onReceive;
+    serv->onClose       = http_onClose;
 
     zval *zsetting = sw_zend_read_property(swoole_server_class_entry_ptr, getThis(), ZEND_STRL("setting"), 1 TSRMLS_CC);
     int is_update = 0;
@@ -1464,7 +1501,7 @@ static PHP_METHOD(swoole_http_server, start)
     if (serv->listen_list->open_websocket_protocol)
     {
         add_assoc_bool(zsetting, "open_websocket_protocol", 1);
-    } 
+    }
 
     if (is_update) {
         zend_update_property(swoole_server_class_entry_ptr, getThis(), ZEND_STRL("setting"), zsetting TSRMLS_CC);
@@ -2369,3 +2406,170 @@ static PHP_METHOD(swoole_http_response, __destruct)
 		swoole_http_context_free(context TSRMLS_CC);
 	}
 }
+
+static void worker_error_handler(int error_num, const char *error_filename, const uint error_lineno, const char *format, va_list args)
+{
+    zend_bool _old_in_compilation;
+	zend_execute_data *_old_current_execute_data;
+	int _old_http_response_code;
+	char *_old_http_status_line;
+
+	_old_in_compilation = CG(in_compilation);
+	_old_current_execute_data = EG(current_execute_data);
+	_old_http_response_code = SG(sapi_headers).http_response_code;
+	_old_http_status_line = SG(sapi_headers).http_status_line;
+
+	if (!PG(modules_activated) || !EG(objects_store).object_buckets) {
+		call_old_error_handler(error_num, error_filename, error_lineno, format, args);
+		return;
+	}
+
+	if (Z_OBJ(SOAP_GLOBAL(error_object)) &&
+	    instanceof_function(Z_OBJCE(SOAP_GLOBAL(error_object)), soap_class_entry)) {
+		zval *tmp;
+		int use_exceptions = 0;
+
+		if ((tmp = zend_hash_str_find(Z_OBJPROP(SOAP_GLOBAL(error_object)), "_exceptions", sizeof("_exceptions")-1)) == NULL ||
+		     Z_TYPE_P(tmp) != IS_FALSE) {
+		     use_exceptions = 1;
+		}
+
+		if ((error_num == E_USER_ERROR ||
+		     error_num == E_COMPILE_ERROR ||
+		     error_num == E_CORE_ERROR ||
+		     error_num == E_ERROR ||
+		     error_num == E_PARSE) &&
+		    use_exceptions) {
+			zval fault;
+			char* code = SOAP_GLOBAL(error_code);
+			char buffer[1024];
+			size_t buffer_len;
+#ifdef va_copy
+			va_list argcopy;
+#endif
+			zend_object **old_objects;
+			int old = PG(display_errors);
+
+#ifdef va_copy
+			va_copy(argcopy, args);
+			buffer_len = vslprintf(buffer, sizeof(buffer)-1, format, argcopy);
+			va_end(argcopy);
+#else
+			buffer_len = vslprintf(buffer, sizeof(buffer)-1, format, args);
+#endif
+			buffer[sizeof(buffer)-1]=0;
+			if (buffer_len > sizeof(buffer) - 1 || buffer_len == (size_t)-1) {
+				buffer_len = sizeof(buffer) - 1;
+			}
+
+			if (code == NULL) {
+				code = "Client";
+			}
+			add_soap_fault_ex(&fault, &SOAP_GLOBAL(error_object), code, buffer, NULL, NULL);
+			Z_ADDREF(fault);
+			zend_throw_exception_object(&fault);
+
+			old_objects = EG(objects_store).object_buckets;
+			EG(objects_store).object_buckets = NULL;
+			PG(display_errors) = 0;
+			SG(sapi_headers).http_status_line = NULL;
+			zend_try {
+				call_old_error_handler(error_num, error_filename, error_lineno, format, args);
+			} zend_catch {
+				CG(in_compilation) = _old_in_compilation;
+				EG(current_execute_data) = _old_current_execute_data;
+				if (SG(sapi_headers).http_status_line) {
+					efree(SG(sapi_headers).http_status_line);
+				}
+				SG(sapi_headers).http_status_line = _old_http_status_line;
+				SG(sapi_headers).http_response_code = _old_http_response_code;
+			} zend_end_try();
+			EG(objects_store).object_buckets = old_objects;
+			PG(display_errors) = old;
+			zend_bailout();
+		} else if (!use_exceptions ||
+		           !SOAP_GLOBAL(error_code) ||
+		           strcmp(SOAP_GLOBAL(error_code),"WSDL") != 0) {
+			/* Ignore libxml warnings during WSDL parsing */
+			call_old_error_handler(error_num, error_filename, error_lineno, format, args);
+		}
+	} else {
+		int old = PG(display_errors);
+		int fault = 0;
+		zval fault_obj;
+#ifdef va_copy
+		va_list argcopy;
+#endif
+
+		if (error_num == E_USER_ERROR ||
+		    error_num == E_COMPILE_ERROR ||
+		    error_num == E_CORE_ERROR ||
+		    error_num == E_ERROR ||
+		    error_num == E_PARSE) {
+
+			char* code = SOAP_GLOBAL(error_code);
+			char buffer[1024];
+			zval outbuf;
+			zval *tmp;
+			soapServicePtr service;
+
+			ZVAL_UNDEF(&outbuf);
+			if (code == NULL) {
+				code = "Server";
+			}
+			if (Z_OBJ(SOAP_GLOBAL(error_object)) &&
+			    instanceof_function(Z_OBJCE(SOAP_GLOBAL(error_object)), soap_server_class_entry) &&
+		        (tmp = zend_hash_str_find(Z_OBJPROP(SOAP_GLOBAL(error_object)), "service", sizeof("service")-1)) != NULL &&
+				(service = (soapServicePtr)zend_fetch_resource_ex(tmp, "service", le_service)) &&
+				!service->send_errors) {
+				strcpy(buffer, "Internal Error");
+			} else {
+				size_t buffer_len;
+				zval outbuflen;
+
+#ifdef va_copy
+				va_copy(argcopy, args);
+				buffer_len = vslprintf(buffer, sizeof(buffer)-1, format, argcopy);
+				va_end(argcopy);
+#else
+				buffer_len = vslprintf(buffer, sizeof(buffer)-1, format, args);
+#endif
+				buffer[sizeof(buffer)-1]=0;
+				if (buffer_len > sizeof(buffer) - 1 || buffer_len == (size_t)-1) {
+					buffer_len = sizeof(buffer) - 1;
+				}
+
+				/* Get output buffer and send as fault detials */
+				if (php_output_get_length(&outbuflen) != FAILURE && Z_LVAL(outbuflen) != 0) {
+					php_output_get_contents(&outbuf);
+				}
+				php_output_discard();
+
+			}
+			ZVAL_NULL(&fault_obj);
+			set_soap_fault(&fault_obj, NULL, code, buffer, NULL, &outbuf, NULL);
+			fault = 1;
+		}
+
+		PG(display_errors) = 0;
+		SG(sapi_headers).http_status_line = NULL;
+		zend_try {
+			call_old_error_handler(error_num, error_filename, error_lineno, format, args);
+		} zend_catch {
+			CG(in_compilation) = _old_in_compilation;
+			EG(current_execute_data) = _old_current_execute_data;
+			if (SG(sapi_headers).http_status_line) {
+				efree(SG(sapi_headers).http_status_line);
+			}
+			SG(sapi_headers).http_status_line = _old_http_status_line;
+			SG(sapi_headers).http_response_code = _old_http_response_code;
+		} zend_end_try();
+		PG(display_errors) = old;
+
+		if (fault) {
+			soap_server_fault_ex(NULL, &fault_obj, NULL);
+			zend_bailout();
+		}
+	}
+}
+
