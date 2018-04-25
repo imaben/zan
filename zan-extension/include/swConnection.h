@@ -173,6 +173,16 @@ typedef struct _swConnection
     swString ssl_client_cert;
 #endif
     sw_atomic_t lock;
+
+    struct {
+        char trace_id[40];
+        struct timeval create_conn;
+        struct timeval push_worker;
+        struct timeval worker_recv;
+        struct timeval worker_push;
+        struct timeval push_client;
+        struct timeval close;
+    } debug;
 }swConnection;
 
 int swConnection_buffer_send(swConnection *conn);

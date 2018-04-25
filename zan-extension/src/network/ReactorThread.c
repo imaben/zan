@@ -930,6 +930,16 @@ int swReactorThread_close(swReactor *reactor, int fd)
         swServer_set_maxfd(serv, find_max_fd);
         SwooleGS->lock.unlock(&SwooleGS->lock);
     }
+    gettimeofday(&conn->debug.close, NULL);
+    swWarn("debug_info:trace_id[%s], create_conn:[%ld.%ld], push_worker:[%ld.%ld], worker_recv:[%ld.%ld], worker_push:[%ld.%ld], push_client:[%ld.%ld], close:[%ld.%ld]",
+            conn->debug.trace_id,
+            conn->debug.create_conn.tv_sec, conn->debug.create_conn.tv_usec,
+            conn->debug.push_worker.tv_sec, conn->debug.push_worker.tv_usec,
+            conn->debug.worker_recv.tv_sec, conn->debug.worker_recv.tv_usec,
+            conn->debug.worker_push.tv_sec, conn->debug.worker_push.tv_usec,
+            conn->debug.push_client.tv_sec, conn->debug.push_client.tv_usec,
+            conn->debug.close.tv_sec, conn->debug.close.tv_usec
+    );
 
     return swReactor_close(reactor, fd);
 }
@@ -1065,6 +1075,7 @@ int swReactorThread_send(swSendData *_send)
 
         return SW_ERR;
     }
+    gettimeofday(&conn->debug.push_client, NULL);
 
     int fd = conn->fd;
     swReactor *reactor = (serv->factory_mode == SW_MODE_SINGLE)?

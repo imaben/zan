@@ -41,7 +41,7 @@ extern "C" {
 
 #define SW_HEARTBEAT_IDLE          0   //心跳存活最大时间
 #define SW_HEARTBEAT_CHECK         0   //心跳定时侦测时间
-    
+
 
 //------------------------------------Server-------------------------------------------
 enum swServer_callback_type

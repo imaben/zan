@@ -205,6 +205,7 @@ int swServer_master_onAccept(swReactor *reactor, swEvent *event)
         memcpy(&conn->info.addr, &client_addr, sizeof(client_addr));
         sub_reactor = &serv->reactor_threads[reactor_id].reactor;
         conn->socket_type = listen_host->type;
+        gettimeofday(&conn->debug.create_conn, NULL);
 
 #ifdef SW_USE_OPENSSL
         if (listen_host->ssl)

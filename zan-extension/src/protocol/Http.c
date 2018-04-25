@@ -249,3 +249,48 @@ int swHttpRequest_get_header_length(swHttpRequest *request)
     request->header_length = n + 4;
     return SW_OK;
 }
+
+int swHttpRequest_get_trace_id(swHttpRequest *request, char *dst, int length)
+{
+    swString *buffer = request->buffer;
+    char *buf = buffer->str;
+    int len = buffer->length;
+
+    /// note: hantf fix #1030; need to check
+    char *pe = buf + len - 2;
+    char *p;
+    char *eol;
+
+    for (p = buf; p < pe; p++)
+    {
+        if (*p == '\r' && *(p + 1) == '\n')
+        {
+        	buffer->offset = p - buffer->str;
+			if (strncasecmp(p + 2, SW_STRL("X-LOGTRACE-ID") - 1) == 0)
+			{
+				p += 2 + (sizeof("X-LOGTRACE-ID:") - 1);
+				eol = strstr(p,"\r\n");
+				if (NULL == eol)
+				{
+					return SW_ERR;
+				}
+
+				while (isspace(*p) && p != eol)
+				{
+					p++;
+				}
+
+				if (p == eol)
+				{
+					return SW_ERR;
+				}
+
+                strncpy(dst, p, (eol - p) > length ? length : (eol - p));
+				return SW_OK;
+			}
+        }
+    }
+
+    return SW_ERR;
+}
+

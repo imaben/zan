@@ -1,22 +1,22 @@
 /*
-  +----------------------------------------------------------------------+
-  | Zan                                                                  |
-  +----------------------------------------------------------------------+
-  | Copyright (c) 2016-2017 Zan Group <https://github.com/youzan/zan>    |
-  | Copyright (c) 2012-2016 Swoole Team <http://github.com/swoole>       |
-  +----------------------------------------------------------------------+
-  | This source file is subject to version 2.0 of the Apache license,    |
-  | that is bundled with this package in the file LICENSE, and is        |
-  | available through the world-wide-web at the following url:           |
-  | http://www.apache.org/licenses/LICENSE-2.0.html                      |
-  | If you did not receive a copy of the Apache2.0 license and are unable|
-  | to obtain it through the world-wide-web, please send a note to       |
-  | zan@zanphp.io so we can mail you a copy immediately.                 |
-  +----------------------------------------------------------------------+
-  | Author: Tianfeng Han  <mikan.tenny@gmail.com>                        |
-  |         Zan Group   <zan@zanphp.io>                                  |
-  +----------------------------------------------------------------------+
-*/
+   +----------------------------------------------------------------------+
+   | Zan                                                                  |
+   +----------------------------------------------------------------------+
+   | Copyright (c) 2016-2017 Zan Group <https://github.com/youzan/zan>    |
+   | Copyright (c) 2012-2016 Swoole Team <http://github.com/swoole>       |
+   +----------------------------------------------------------------------+
+   | This source file is subject to version 2.0 of the Apache license,    |
+   | that is bundled with this package in the file LICENSE, and is        |
+   | available through the world-wide-web at the following url:           |
+   | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+   | If you did not receive a copy of the Apache2.0 license and are unable|
+   | to obtain it through the world-wide-web, please send a note to       |
+   | zan@zanphp.io so we can mail you a copy immediately.                 |
+   +----------------------------------------------------------------------+
+   | Author: Tianfeng Han  <mikan.tenny@gmail.com>                        |
+   |         Zan Group   <zan@zanphp.io>                                  |
+   +----------------------------------------------------------------------+
+   */
 
 
 #include "swServer.h"
@@ -67,8 +67,8 @@ int swPort_set_option(swListenPort *ls)
 #ifdef HAVE_REUSEPORT
     if (SwooleG.reuse_port && setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &option, sizeof(int)) < 0)
     {
-		swSysError("setsockopt(SO_REUSEPORT) failed.");
-		SwooleG.reuse_port = 0;
+        swSysError("setsockopt(SO_REUSEPORT) failed.");
+        SwooleG.reuse_port = 0;
     }
 #endif
 
@@ -96,7 +96,7 @@ int swPort_set_option(swListenPort *ls)
         }
         if (ls->ssl_client_cert_file && swSSL_set_client_certificate(ls->ssl_context, ls->ssl_client_cert_file, ls->ssl_verify_depth) == SW_ERR)
         {
-        	swError("swSSL_set_client_certificate() error.");
+            swError("swSSL_set_client_certificate() error.");
             return SW_ERR;
         }
         if (ls->open_http_protocol)
@@ -110,15 +110,15 @@ int swPort_set_option(swListenPort *ls)
         }
         if (swSSL_server_set_cipher(ls->ssl_context, &ls->ssl_config) < 0)
         {
-        	swError("swSSL_server_set_cipher() error.");
+            swError("swSSL_server_set_cipher() error.");
             return SW_ERR;
         }
     }
 
     if (ls->ssl && (!ls->ssl_cert_file || !ls->ssl_key_file))
     {
-		swWarn("need to set [ssl_cert_file] or [ssl_key_file] option.");
-		return SW_ERR;
+        swWarn("need to set [ssl_cert_file] or [ssl_key_file] option.");
+        return SW_ERR;
     }
 #endif
 
@@ -131,7 +131,7 @@ int swPort_set_option(swListenPort *ls)
 
 #ifdef TCP_DEFER_ACCEPT
     if (ls->tcp_defer_accept && setsockopt(sock, IPPROTO_TCP, TCP_DEFER_ACCEPT,
-    								(const void*) &ls->tcp_defer_accept, sizeof(int)) < 0)
+                (const void*) &ls->tcp_defer_accept, sizeof(int)) < 0)
     {
         swSysError("setsockopt(TCP_DEFER_ACCEPT) failed.");
     }
@@ -139,7 +139,7 @@ int swPort_set_option(swListenPort *ls)
 
 #ifdef TCP_FASTOPEN
     if (ls->tcp_fastopen && setsockopt(sock, IPPROTO_TCP, TCP_FASTOPEN,
-    		(const void*) &ls->tcp_fastopen, sizeof(int)) < 0)
+                (const void*) &ls->tcp_fastopen, sizeof(int)) < 0)
     {
         swSysError("setsockopt(TCP_FASTOPEN) failed.");
     }
@@ -182,37 +182,37 @@ static int swPort_websocket_onPackage(swConnection *conn, char *data, uint32_t l
     size_t offset;
     switch (ws.header.OPCODE)
     {
-    case WEBSOCKET_OPCODE_CONTINUATION_FRAME:
-    case WEBSOCKET_OPCODE_TEXT_FRAME:
-    case WEBSOCKET_OPCODE_BINARY_FRAME:
-        offset = length - ws.payload_length - 2;
-        data[offset] = ws.header.FIN;
-        data[offset + 1] = ws.header.OPCODE;
-        swReactorThread_dispatch(conn, data + offset, length - offset);
-        break;
+        case WEBSOCKET_OPCODE_CONTINUATION_FRAME:
+        case WEBSOCKET_OPCODE_TEXT_FRAME:
+        case WEBSOCKET_OPCODE_BINARY_FRAME:
+            offset = length - ws.payload_length - 2;
+            data[offset] = ws.header.FIN;
+            data[offset + 1] = ws.header.OPCODE;
+            swReactorThread_dispatch(conn, data + offset, length - offset);
+            break;
 
-    case WEBSOCKET_OPCODE_PING:
-        if (length == 2 || length >= (sizeof(buf) - 2))
-        {
+        case WEBSOCKET_OPCODE_PING:
+            if (length == 2 || length >= (sizeof(buf) - 2))
+            {
+                return SW_ERR;
+            }
+            swWebSocket_encode(&send_frame, data += 2, length - 2, WEBSOCKET_OPCODE_PONG, 1, 0);
+            swConnection_send(conn, send_frame.str, send_frame.length, 0);
+            break;
+
+        case WEBSOCKET_OPCODE_PONG:
             return SW_ERR;
-        }
-        swWebSocket_encode(&send_frame, data += 2, length - 2, WEBSOCKET_OPCODE_PONG, 1, 0);
-        swConnection_send(conn, send_frame.str, send_frame.length, 0);
-        break;
 
-    case WEBSOCKET_OPCODE_PONG:
-        return SW_ERR;
-
-    case WEBSOCKET_OPCODE_CONNECTION_CLOSE:
-        if (0x7d < (length - 2))
-        {
+        case WEBSOCKET_OPCODE_CONNECTION_CLOSE:
+            if (0x7d < (length - 2))
+            {
+                return SW_ERR;
+            }
+            send_frame.str[0] = 0x88;
+            send_frame.str[1] = 0x00;
+            send_frame.length = 2;
+            swConnection_send(conn, send_frame.str, 2, 0);
             return SW_ERR;
-        }
-        send_frame.str[0] = 0x88;
-        send_frame.str[1] = 0x00;
-        send_frame.length = 2;
-        swConnection_send(conn, send_frame.str, 2, 0);
-        return SW_ERR;
     }
     return SW_OK;
 }
@@ -279,19 +279,19 @@ static int swPort_onRead_raw(swReactor *reactor, swListenPort *port, swEvent *ev
     {
         switch (swConnection_error(errno))
         {
-        case SW_ERROR:
-            swSysError("recv from connection#%d failed.", event->fd);
-            return SW_OK;
-        case SW_CLOSE:
-            goto close_fd;
-        default:
-            return SW_OK;
+            case SW_ERROR:
+                swSysError("recv from connection#%d failed.", event->fd);
+                return SW_OK;
+            case SW_CLOSE:
+                goto close_fd;
+            default:
+                return SW_OK;
         }
     }
     else if (n == 0)
     {
-        close_fd: swReactorThread_onClose(reactor, event);
-        return SW_OK;
+close_fd: swReactorThread_onClose(reactor, event);
+          return SW_OK;
     }
     else
     {
@@ -385,7 +385,7 @@ static int swPort_onRead_http(swReactor *reactor, swListenPort *port, swEvent *e
 
     if (!request->buffer)
     {
-     //alloc memory failed.
+        //alloc memory failed.
         request->buffer = swString_new(SW_HTTP_HEADER_MAX_SIZE);
         if (!request->buffer)
         {
@@ -405,18 +405,18 @@ recv_data:
     {
         switch (swConnection_error(errno))
         {
-        case SW_ERROR:
-            swSysError("recv from connection#%d failed.", event->fd);
-            return SW_OK;
-        case SW_CLOSE:
-            goto close_fd;
-        default:
-            return SW_OK;
+            case SW_ERROR:
+                swSysError("recv from connection#%d failed.", event->fd);
+                return SW_OK;
+            case SW_CLOSE:
+                goto close_fd;
+            default:
+                return SW_OK;
         }
     }
     else if (n == 0)
     {
-        close_fd:
+close_fd:
         swHttpRequest_free(conn);
         swReactorThread_onClose(reactor, event);
         return SW_OK;
@@ -426,7 +426,7 @@ recv_data:
         buffer->length += n;
         if (request->method == 0 && swHttpRequest_get_protocol(request) < 0)
         {
-        	/// 数据没有接收全，继续接收
+            /// 数据没有接收全，继续接收
             if (request->buffer->length < SW_HTTP_HEADER_MAX_SIZE)
             {
                 return SW_OK;
@@ -442,105 +442,109 @@ recv_data:
             goto close_fd;
         }
 
-        //support method:get post put delete patch head options   
+        //support method:get post put delete patch head options
         if ((request->method > 0 && request->method <= HTTP_PATCH) || request->method == HTTP_OPTIONS)
         {
-        	//receive data of http header
-			if (request->header_length == 0)
-			{
-				if (swHttpRequest_get_header_length(request) < 0)
-				{
-					if (buffer->size == buffer->length)
-					{
-						swWarn("http header is too long.");
-						goto close_fd;
-					}
-					else
-					{
-						goto recv_data;
-					}
-				}
-			}
-			//handle http body
-			if (request->content_length == 0)
-			{
-				//http_no_entity
-				if (swHttpRequest_get_content_length(request) < 0)
-				{
-					if (memcmp(buffer->str + buffer->length - 4, "\r\n\r\n", 4) == 0)
-					{
-						swReactorThread_dispatch(conn, buffer->str, buffer->length);
-						swHttpRequest_free(conn);
-						return SW_OK;
-					}
-					else if (buffer->size == buffer->length)
-					{
-						swWarn("http header is too long.");
-						goto close_fd;
-					}
-					else
-					{
-						goto recv_data;
-					}
-				}
-				//content_length overflow
-				else if (request->content_length > (protocol->package_max_length - SW_HTTP_HEADER_MAX_SIZE))
-				{
-					swWarn("Content-Length more than the package_max_length[%d].", protocol->package_max_length - SW_HTTP_HEADER_MAX_SIZE);
-					goto close_fd;
-				}
-			}
-			//http_entity
-			uint32_t request_size = request->content_length + request->header_length;
-			int needExtentBuf = request_size > buffer->size;
-			if (needExtentBuf && swString_extend(buffer, request_size) < 0)
-			{
-				goto close_fd;
-			}
+            if (swHttpRequest_get_trace_id(request, conn->debug.trace_id, sizeof(conn->debug.trace_id) - 1) < 0) {
+                swWarn("header X-TRACE-ID does not exists");
+            }
 
-			//discard the redundant data
-			buffer->length = (buffer->length > request_size)? request_size:buffer->length;
-			if (buffer->length == request_size)
-			{
-				swReactorThread_dispatch(conn, buffer->str, buffer->length);
-				swHttpRequest_free(conn);
-			}
-			else
-			{
+            //receive data of http header
+            if (request->header_length == 0)
+            {
+                if (swHttpRequest_get_header_length(request) < 0)
+                {
+                    if (buffer->size == buffer->length)
+                    {
+                        swWarn("http header is too long.");
+                        goto close_fd;
+                    }
+                    else
+                    {
+                        goto recv_data;
+                    }
+                }
+            }
+            //handle http body
+            if (request->content_length == 0)
+            {
+                //http_no_entity
+                if (swHttpRequest_get_content_length(request) < 0)
+                {
+                    if (memcmp(buffer->str + buffer->length - 4, "\r\n\r\n", 4) == 0)
+                    {
+                        swReactorThread_dispatch(conn, buffer->str, buffer->length);
+                        swHttpRequest_free(conn);
+                        return SW_OK;
+                    }
+                    else if (buffer->size == buffer->length)
+                    {
+                        swWarn("http header is too long.");
+                        goto close_fd;
+                    }
+                    else
+                    {
+                        goto recv_data;
+                    }
+                }
+                //content_length overflow
+                else if (request->content_length > (protocol->package_max_length - SW_HTTP_HEADER_MAX_SIZE))
+                {
+                    swWarn("Content-Length more than the package_max_length[%d].", protocol->package_max_length - SW_HTTP_HEADER_MAX_SIZE);
+                    goto close_fd;
+                }
+            }
+            //http_entity
+            uint32_t request_size = request->content_length + request->header_length;
+            int needExtentBuf = request_size > buffer->size;
+            if (needExtentBuf && swString_extend(buffer, request_size) < 0)
+            {
+                goto close_fd;
+            }
+
+            //discard the redundant data
+            buffer->length = (buffer->length > request_size)? request_size:buffer->length;
+            if (buffer->length == request_size)
+            {
+                swReactorThread_dispatch(conn, buffer->str, buffer->length);
+                swHttpRequest_free(conn);
+            }
+            else
+            {
 #ifdef SW_HTTP_100_CONTINUE
-				//Expect: 100-continue
-				if (swHttpRequest_has_expect_header(request))
-				{
-					swSendData _send;
-					_send.data = "HTTP/1.1 100 Continue\r\n\r\n";
-					_send.length = strlen(_send.data);
+                //Expect: 100-continue
+                if (swHttpRequest_has_expect_header(request))
+                {
+                    swSendData _send;
+                    _send.data = "HTTP/1.1 100 Continue\r\n\r\n";
+                    _send.length = strlen(_send.data);
 
-					int send_times = 0;
-					direct_send:
-					n = swConnection_send(conn, _send.data, _send.length, 0);
-					if (n < _send.length)
-					{
-						_send.data += n;
-						_send.length -= n;
-						send_times++;
-						if (send_times < 10)
-						{
-							goto direct_send;
-						}
-						else
-						{
-							swWarn("send http header failed");
-						}
-					}
-				}
-				else
-				{
-					swTrace("PostWait: request->content_length=%d, buffer->length=%zd, request->header_length=%d\n",
-							request->content_length, buffer->length, request->header_length);
-				}
+                    int send_times = 0;
+direct_send:
+                    n = swConnection_send(conn, _send.data, _send.length, 0);
+                    if (n < _send.length)
+                    {
+                        _send.data += n;
+                        _send.length -= n;
+                        send_times++;
+                        if (send_times < 10)
+                        {
+                            goto direct_send;
+                        }
+                        else
+                        {
+                            swWarn("send http header failed");
+                        }
+                    }
+                }
+                else
+                {
+                    swTrace("PostWait: request->content_length=%d, buffer->length=%zd, request->header_length=%d\n",
+                            request->content_length, buffer->length, request->header_length);
+                }
 #endif
-				goto recv_data;
-			}
+                goto recv_data;
+            }
         }
 #ifdef SW_USE_HTTP2
         else if (request->method == HTTP_PRI)

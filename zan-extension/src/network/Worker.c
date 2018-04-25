@@ -220,6 +220,13 @@ int swWorker_onTask(swFactory *factory, swEventData *task)
             sw_stats_incr(&SwooleStats->request_count);
             sw_stats_incr(&SwooleStats->workers[SwooleWG.id].total_request_count);
             sw_stats_incr(&SwooleStats->workers[SwooleWG.id].request_count);
+
+            swConnection *conn = swServer_connection_verify(serv, task->info.fd);
+            if (!conn) {
+                swWarn("get connection fail");
+            } else {
+                gettimeofday(&conn->debug.worker_recv, NULL);
+            }
         }
         if (task->info.type == SW_EVENT_PACKAGE_END)
         {

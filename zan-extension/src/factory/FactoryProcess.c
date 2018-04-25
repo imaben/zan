@@ -179,6 +179,8 @@ static int swFactoryProcess_dispatch(swFactory *factory, swDispatchData *task)
         //converted fd to session_id
         task->data.info.fd = conn->session_id;
         task->data.info.from_fd = conn->from_fd;
+
+        gettimeofday(&conn->debug.push_worker, NULL);
     }
 
     return swReactorThread_send2worker((void *) &(task->data), send_len, target_worker_id);
@@ -254,6 +256,7 @@ static int swFactoryProcess_finish(swFactory *factory, swSendData *resp)
 
     sendn = ev_data.info.len + sizeof(resp->info);
     swTrace("[Worker] send: sendn=%d|type=%d|content=%s", sendn, resp->info.type, resp->data);
+    gettimeofday(&conn->debug.worker_push, NULL);
     ret = swWorker_send2reactor(&ev_data, sendn, fd);
     if (ret < 0)
     {

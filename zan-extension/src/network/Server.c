@@ -984,9 +984,9 @@ swListenPort* swServer_add_port(swServer *serv, int type, char *host, int port)
 			swFatalError("this port is listen now");
 			return NULL;
 		}
-		
+
 	}
-	
+
     swListenPort *ls = SwooleG.memory_pool->alloc(SwooleG.memory_pool, sizeof(swListenPort));
     if (ls == NULL)
     {
